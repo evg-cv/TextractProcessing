@@ -1,8 +1,7 @@
 import boto3
-import time
-from Helper import DocProcessor, FileHelper, OutputGenerator
+from Helper import DocProcessor, OutputGenerator
 import json
-import os
+
 
 def lambda_handler(event, context):
     print(event)
@@ -12,18 +11,15 @@ def lambda_handler(event, context):
             if 'requestParameters' in event['detail']:
                 key = event['detail']['requestParameters']['key']
                 document_name = key
-   
 
-    
                 # Get document textracted
                 dp = DocProcessor(document_name)
                 response = dp.run()
                 print("Recieved Textract response...")
-            
-                name, ext = FileHelper.getFileNameAndExtension(document_name)
+
                 opg = OutputGenerator(response, document_name)
                 opg.run()
-                
+
                 s3 = boto3.resource('s3')
                 copy_source = {
                     'Bucket': bucket_name,
@@ -31,9 +27,9 @@ def lambda_handler(event, context):
                 }
                 copy_key = 'processed/{}'.format(document_name.split("/")[-1])
                 s3.meta.client.copy(copy_source, bucket_name, copy_key)
-                
+
                 client = boto3.client('s3')
-                response = client.delete_object(
+                client.delete_object(
                     Bucket=bucket_name,
                     Key=document_name,
                 )
@@ -42,8 +38,7 @@ def lambda_handler(event, context):
                     "body": json.dumps("{} Textracted Successfully.".format(document_name)),
                     "statusCode": 200
                 }
-                
-                
+
     return {
         "body": json.dumps("No document found."),
         "statusCode": 200

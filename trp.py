@@ -1,5 +1,3 @@
-import json
-
 class BoundingBox:
     def __init__(self, width, height, left, top):
         self._width = width
@@ -26,6 +24,7 @@ class BoundingBox:
     def top(self):
         return self._top
 
+
 class Polygon:
     def __init__(self, x, y):
         self._x = x
@@ -42,11 +41,12 @@ class Polygon:
     def y(self):
         return self._y
 
+
 class Geometry:
     def __init__(self, geometry):
-        boundingBox = geometry["BoundingBox"]
+        bounding_box = geometry["BoundingBox"]
         polygon = geometry["Polygon"]
-        bb = BoundingBox(boundingBox["Width"], boundingBox["Height"], boundingBox["Left"], boundingBox["Top"])
+        bb = BoundingBox(bounding_box["Width"], bounding_box["Height"], bounding_box["Left"], bounding_box["Top"])
         pgs = []
         for pg in polygon:
             pgs.append(Polygon(pg["X"], pg["Y"]))
@@ -59,21 +59,22 @@ class Geometry:
         return s
 
     @property
-    def boundingBox(self):
+    def bounding_box(self):
         return self._boundingBox
 
     @property
     def polygon(self):
         return self._polygon
 
+
 class Word:
-    def __init__(self, block, blockMap):
+    def __init__(self, block):
         self._block = block
         self._confidence = block['Confidence']
         self._geometry = Geometry(block['Geometry'])
         self._id = block['Id']
         self._text = ""
-        if(block['Text']):
+        if block['Text']:
             self._text = block['Text']
 
     def __str__(self):
@@ -99,8 +100,9 @@ class Word:
     def block(self):
         return self._block
 
+
 class Line:
-    def __init__(self, block, blockMap):
+    def __init__(self, block, block_map):
 
         self._block = block
         self._confidence = block['Confidence']
@@ -108,16 +110,17 @@ class Line:
         self._id = block['Id']
 
         self._text = ""
-        if(block['Text']):
+        if block['Text']:
             self._text = block['Text']
 
         self._words = []
-        if('Relationships' in block and block['Relationships']):
+        if 'Relationships' in block and block['Relationships']:
             for rs in block['Relationships']:
-                if(rs['Type'] == 'CHILD'):
+                if rs['Type'] == 'CHILD':
                     for cid in rs['Ids']:
-                        if(blockMap[cid]["BlockType"] == "WORD"):
-                            self._words.append(Word(blockMap[cid], blockMap))
+                        if block_map[cid]["BlockType"] == "WORD":
+                            self._words.append(Word(block_map[cid]))
+
     def __str__(self):
         s = "Line\n==========\n"
         s = s + self._text + "\n"
@@ -150,8 +153,9 @@ class Line:
     def block(self):
         return self._block
 
+
 class SelectionElement:
-    def __init__(self, block, blockMap):
+    def __init__(self, block):
         self._confidence = block['Confidence']
         self._geometry = Geometry(block['Geometry'])
         self._id = block['Id']
@@ -170,11 +174,12 @@ class SelectionElement:
         return self._id
 
     @property
-    def selectionStatus(self):
+    def selection_status(self):
         return self._selectionStatus
 
+
 class FieldKey:
-    def __init__(self, block, children, blockMap):
+    def __init__(self, block, children, block_map):
         self._block = block
         self._confidence = block['Confidence']
         self._geometry = Geometry(block['Geometry'])
@@ -185,13 +190,13 @@ class FieldKey:
         t = []
 
         for eid in children:
-            wb = blockMap[eid]
-            if(wb['BlockType'] == "WORD"):
-                w = Word(wb, blockMap)
+            wb = block_map[eid]
+            if wb['BlockType'] == "WORD":
+                w = Word(wb)
                 self._content.append(w)
                 t.append(w.text)
 
-        if(t):
+        if t:
             self._text = ' '.join(t)
 
     def __str__(self):
@@ -220,9 +225,10 @@ class FieldKey:
     @property
     def block(self):
         return self._block
+
 
 class FieldValue:
-    def __init__(self, block, children, blockMap):
+    def __init__(self, block, children, block_map):
         self._block = block
         self._confidence = block['Confidence']
         self._geometry = Geometry(block['Geometry'])
@@ -233,17 +239,17 @@ class FieldValue:
         t = []
 
         for eid in children:
-            wb = blockMap[eid]
-            if(wb['BlockType'] == "WORD"):
-                w = Word(wb, blockMap)
+            wb = block_map[eid]
+            if wb['BlockType'] == "WORD":
+                w = Word(wb)
                 self._content.append(w)
                 t.append(w.text)
-            elif(wb['BlockType'] == "SELECTION_ELEMENT"):
-                se = SelectionElement(wb, blockMap)
+            elif wb['BlockType'] == "SELECTION_ELEMENT":
+                se = SelectionElement(wb)
                 self._content.append(se)
-                self._text = se.selectionStatus
+                self._text = se.selection_status
 
-        if(t):
+        if t:
             self._text = ' '.join(t)
 
     def __str__(self):
@@ -268,34 +274,36 @@ class FieldValue:
     @property
     def text(self):
         return self._text
-    
+
     @property
     def block(self):
         return self._block
 
+
 class Field:
-    def __init__(self, block, blockMap):
+    def __init__(self, block, block_map):
         self._key = None
         self._value = None
 
         for item in block['Relationships']:
-            if(item["Type"] == "CHILD"):
-                self._key = FieldKey(block, item['Ids'], blockMap)
-            elif(item["Type"] == "VALUE"):
+            if item["Type"] == "CHILD":
+                self._key = FieldKey(block, item['Ids'], block_map)
+            elif item["Type"] == "VALUE":
                 for eid in item['Ids']:
-                    vkvs = blockMap[eid]
+                    vkvs = block_map[eid]
                     if 'VALUE' in vkvs['EntityTypes']:
-                        if('Relationships' in vkvs):
+                        if 'Relationships' in vkvs:
                             for vitem in vkvs['Relationships']:
-                                if(vitem["Type"] == "CHILD"):
-                                    self._value = FieldValue(vkvs, vitem['Ids'], blockMap)
+                                if vitem["Type"] == "CHILD":
+                                    self._value = FieldValue(vkvs, vitem['Ids'], block_map)
+
     def __str__(self):
         s = "\nField\n==========\n"
         k = ""
         v = ""
-        if(self._key):
+        if self._key:
             k = str(self._key)
-        if(self._value):
+        if self._value:
             v = str(self._value)
         s = s + "Key: {}\nValue: {}".format(k, v)
         return s
@@ -308,12 +316,13 @@ class Field:
     def value(self):
         return self._value
 
+
 class Form:
     def __init__(self):
         self._fields = []
         self._fieldsMap = {}
 
-    def addField(self, field):
+    def add_field(self, field):
         self._fields.append(field)
         self._fieldsMap[field.key.text] = field
 
@@ -327,23 +336,24 @@ class Form:
     def fields(self):
         return self._fields
 
-    def getFieldByKey(self, key):
+    def get_field_by_key(self, key):
         field = None
-        if(key in self._fieldsMap):
+        if key in self._fieldsMap:
             field = self._fieldsMap[key]
         return field
-    
-    def searchFieldsByKey(self, key):
-        searchKey = key.lower()
+
+    def search_fields_by_key(self, key):
+        search_key = key.lower()
         results = []
         for field in self._fields:
-            if(field.key and searchKey in field.key.text.lower()):
+            if field.key and search_key in field.key.text.lower():
                 results.append(field)
         return results
 
+
 class Cell:
 
-    def __init__(self, block, blockMap):
+    def __init__(self, block, block_map):
         self._block = block
         self._confidence = block['Confidence']
         self._rowIndex = block['RowIndex']
@@ -354,19 +364,19 @@ class Cell:
         self._id = block['Id']
         self._content = []
         self._text = ""
-        if('Relationships' in block and block['Relationships']):
+        if 'Relationships' in block and block['Relationships']:
             for rs in block['Relationships']:
-                if(rs['Type'] == 'CHILD'):
+                if rs['Type'] == 'CHILD':
                     for cid in rs['Ids']:
-                        blockType = blockMap[cid]["BlockType"]
-                        if(blockType == "WORD"):
-                            w = Word(blockMap[cid], blockMap)
+                        block_type = block_map[cid]["BlockType"]
+                        if block_type == "WORD":
+                            w = Word(block_map[cid])
                             self._content.append(w)
                             self._text = self._text + w.text + ' '
-                        elif(blockType == "SELECTION_ELEMENT"):
-                            se = SelectionElement(blockMap[cid], blockMap)
+                        elif block_type == "SELECTION_ELEMENT":
+                            se = SelectionElement(block_map[cid])
                             self._content.append(se)
-                            self._text = self._text + se.selectionStatus + ', '
+                            self._text = self._text + se.selection_status + ', '
 
     def __str__(self):
         return self._text
@@ -376,19 +386,19 @@ class Cell:
         return self._confidence
 
     @property
-    def rowIndex(self):
+    def row_index(self):
         return self._rowIndex
 
     @property
-    def columnIndex(self):
+    def column_index(self):
         return self._columnIndex
 
     @property
-    def rowSpan(self):
+    def row_span(self):
         return self._rowSpan
 
     @property
-    def columnSpan(self):
+    def column_span(self):
         return self._columnSpan
 
     @property
@@ -411,6 +421,7 @@ class Cell:
     def block(self):
         return self._block
 
+
 class Row:
     def __init__(self):
         self._cells = []
@@ -425,9 +436,10 @@ class Row:
     def cells(self):
         return self._cells
 
+
 class Table:
 
-    def __init__(self, block, blockMap):
+    def __init__(self, block, block_map):
 
         self._block = block
 
@@ -439,18 +451,17 @@ class Table:
 
         ri = 1
         row = Row()
-        cell = None
-        if('Relationships' in block and block['Relationships']):
+        if 'Relationships' in block and block['Relationships']:
             for rs in block['Relationships']:
-                if(rs['Type'] == 'CHILD'):
+                if rs['Type'] == 'CHILD':
                     for cid in rs['Ids']:
-                        cell = Cell(blockMap[cid], blockMap)
-                        if(cell.rowIndex > ri):
+                        cell = Cell(block_map[cid], block_map)
+                        if cell.row_index > ri:
                             self._rows.append(row)
                             row = Row()
-                            ri = cell.rowIndex
+                            ri = cell.row_index
                         row.cells.append(cell)
-                    if(row and row.cells):
+                    if row and row.cells:
                         self._rows.append(row)
 
     def __str__(self):
@@ -480,9 +491,10 @@ class Table:
     def block(self):
         return self._block
 
+
 class Page:
 
-    def __init__(self, blocks, blockMap):
+    def __init__(self, blocks, block_map):
         self._blocks = blocks
         self._text = ""
         self._lines = []
@@ -490,7 +502,7 @@ class Page:
         self._tables = []
         self._content = []
 
-        self._parse(blockMap)
+        self._parse(block_map)
 
     def __str__(self):
         s = "Page\n==========\n"
@@ -498,55 +510,57 @@ class Page:
             s = s + str(item) + "\n"
         return s
 
-    def _parse(self, blockMap):
+    def _parse(self, block_map):
         for item in self._blocks:
             if item["BlockType"] == "PAGE":
                 self._geometry = Geometry(item['Geometry'])
                 self._id = item['Id']
             elif item["BlockType"] == "LINE":
-                l = Line(item, blockMap)
-                self._lines.append(l)
-                self._content.append(l)
-                self._text = self._text + l.text + '\n'
+                line = Line(item, block_map)
+                self._lines.append(line)
+                self._content.append(line)
+                self._text = self._text + line.text + '\n'
             elif item["BlockType"] == "TABLE":
-                t = Table(item, blockMap)
+                t = Table(item, block_map)
                 self._tables.append(t)
                 self._content.append(t)
             elif item["BlockType"] == "KEY_VALUE_SET":
                 if 'KEY' in item['EntityTypes']:
-                    f = Field(item, blockMap)
-                    if(f.key):
-                        self._form.addField(f)
+                    f = Field(item, block_map)
+                    if f.key:
+                        self._form.add_field(f)
                         self._content.append(f)
                     else:
                         print("WARNING: Detected K/V where key does not have content. Excluding key from output.")
                         print(f)
                         print(item)
 
-    def getLinesInReadingOrder(self):
+    def get_lines_in_reading_order(self):
         columns = []
         lines = []
         for item in self._lines:
-                column_found=False
-                for index, column in enumerate(columns):
-                    bbox_left = item.geometry.boundingBox.left
-                    bbox_right = item.geometry.boundingBox.left + item.geometry.boundingBox.width
-                    bbox_centre = item.geometry.boundingBox.left + item.geometry.boundingBox.width/2
-                    column_centre = column['left'] + column['right']/2
-                    if (bbox_centre > column['left'] and bbox_centre < column['right']) or (column_centre > bbox_left and column_centre < bbox_right):
-                        #Bbox appears inside the column
-                        lines.append([index, item.text])
-                        column_found=True
-                        break
-                if not column_found:
-                    columns.append({'left':item.geometry.boundingBox.left, 'right':item.geometry.boundingBox.left + item.geometry.boundingBox.width})
-                    lines.append([len(columns)-1, item.text])
+            column_found = False
+            for index, column in enumerate(columns):
+                bbox_left = item.geometry.bounding_box.left
+                bbox_right = item.geometry.bounding_box.left + item.geometry.bounding_box.width
+                bbox_centre = item.geometry.bounding_box.left + item.geometry.bounding_box.width / 2
+                column_centre = column['left'] + column['right'] / 2
+                if (column['left'] < bbox_centre < column['right']) or (
+                        bbox_left < column_centre < bbox_right):
+                    # Bbox appears inside the column
+                    lines.append([index, item.text])
+                    column_found = True
+                    break
+            if not column_found:
+                columns.append({'left': item.geometry.bounding_box.left,
+                                'right': item.geometry.bounding_box.left + item.geometry.bounding_box.width})
+                lines.append([len(columns) - 1, item.text])
 
         lines.sort(key=lambda x: x[0])
         return lines
 
-    def getTextInReadingOrder(self):
-        lines = self.getLinesInReadingOrder()
+    def get_text_in_reading_order(self):
+        lines = self.get_lines_in_reading_order()
         text = ""
         for line in lines:
             text = text + line[1] + '\n'
@@ -584,16 +598,16 @@ class Page:
     def id(self):
         return self._id
 
+
 class Document:
 
-    def __init__(self, responsePages):
+    def __init__(self, response_pages):
 
-        if(not isinstance(responsePages, list)):
-            rps = []
-            rps.append(responsePages)
-            responsePages = rps
+        if not isinstance(response_pages, list):
+            rps = [response_pages]
+            response_pages = rps
 
-        self._responsePages = responsePages
+        self._responsePages = response_pages
         self._pages = []
 
         self._parse()
@@ -604,31 +618,30 @@ class Document:
             s = s + str(p) + "\n\n"
         return s
 
-    def _parseDocumentPagesAndBlockMap(self):
+    def _parse_document_pages_and_block_map(self):
 
-        blockMap = {}
+        block_map = {}
 
-        documentPages = []
-        documentPage = None
+        document_pages = []
+        document_page = None
         for page in self._responsePages:
             for block in page['Blocks']:
-                if('BlockType' in block and 'Id' in block):
-                    blockMap[block['Id']] = block
+                if 'BlockType' in block and 'Id' in block:
+                    block_map[block['Id']] = block
 
-                if(block['BlockType'] == 'PAGE'):
-                    if(documentPage):
-                        documentPages.append({"Blocks" : documentPage})
-                    documentPage = []
-                    documentPage.append(block)
+                if block['BlockType'] == 'PAGE':
+                    if document_page:
+                        document_pages.append({"Blocks": document_page})
+                    document_page = [block]
                 else:
-                    documentPage.append(block)
-        if(documentPage):
-            documentPages.append({"Blocks" : documentPage})
-        return documentPages, blockMap
+                    document_page.append(block)
+        if document_page:
+            document_pages.append({"Blocks": document_page})
+        return document_pages, block_map
 
     def _parse(self):
 
-        self._responseDocumentPages, self._blockMap = self._parseDocumentPagesAndBlockMap()
+        self._responseDocumentPages, self._blockMap = self._parse_document_pages_and_block_map()
         for documentPage in self._responseDocumentPages:
             page = Page(documentPage["Blocks"], self._blockMap)
             self._pages.append(page)
@@ -638,16 +651,20 @@ class Document:
         return self._responsePages
 
     @property
-    def pageBlocks(self):
+    def page_blocks(self):
         return self._responseDocumentPages
 
     @property
     def pages(self):
         return self._pages
 
-    def getBlockById(self, blockId):
+    def get_block_by_id(self, block_id):
         block = None
-        if(self._blockMap and blockId in self._blockMap):
-            block = self._blockMap[blockId]
+        if self._blockMap and block_id in self._blockMap:
+            block = self._blockMap[block_id]
         return block
 
+
+if __name__ == '__main__':
+
+    Form().search_fields_by_key(key="")
