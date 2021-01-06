@@ -333,6 +333,7 @@ class OutputGenerator:
         json_resp['filename'] = self.document_name.split('/')[-1]
         json_resp['final_path'] = 'https://test-textract-bucket1.s3.ap-south-1.amazonaws.com/processed/{}'.format(
             self.document_name.split('/')[-1])
+        json_resp.update(modified_data)
         # print(jsonResp)
 
         header_row = ['filename', 'sample_id', 'sample_id_confidence', 'sample_collected_date',

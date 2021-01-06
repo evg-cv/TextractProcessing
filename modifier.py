@@ -8,14 +8,12 @@ from settings import REF_FIELD_NAMES, TICK_THRESH
 # ---------- remove --------
 params = configparser.ConfigParser()
 params.read("/media/main/Data/Task/TextractProcessing/config.cfg")
-
-
 # ---------------
 
 
 class Modifier:
     def __init__(self):
-        self.response = None
+        self.net_response = None
         self.key_value_data = None
         self.frame = None
         self.table_data = None
@@ -51,12 +49,12 @@ class Modifier:
             else:
                 roi_frame = self.frame[int(bottom * self.frame_height):int((bottom + 0.01) * self.frame_height),
                                        int(left * self.frame_width): int((left + width) * self.frame_width)]
-        cv2.imshow("roi frame", roi_frame)
-        cv2.waitKey()
+        # cv2.imshow("roi frame", roi_frame)
+        # cv2.waitKey()
         gray_frame = cv2.cvtColor(roi_frame, cv2.COLOR_BGR2GRAY)
-        _, thresh_frame = cv2.threshold(gray_frame, 127, 255, cv2.THRESH_BINARY)
-        cv2.imshow("thresh frame", thresh_frame)
-        cv2.waitKey()
+        _, thresh_frame = cv2.threshold(gray_frame, 200, 255, cv2.THRESH_BINARY)
+        # cv2.imshow("thresh frame", thresh_frame)
+        # cv2.waitKey()
         black_pixel_nums = len(thresh_frame[thresh_frame == 0])
         print(black_pixel_nums)
         if yes_no_ret:
@@ -76,7 +74,7 @@ class Modifier:
                                               t_data_geometry.left + t_data_geometry.width,
                                               t_data_geometry.top + t_data_geometry.height])
 
-        for res in self.response[0]["Blocks"][1:]:
+        for res in self.net_response:
             res_coordinate = res["Geometry"]["BoundingBox"]
             if res["BlockType"] == "LINE" and res["Text"] == "HEAD":
                 init_table_coordinates.append([res_coordinate["Left"], res_coordinate["Top"],
@@ -168,7 +166,8 @@ class Modifier:
                                     json_key = csv_data[i][j]
                                     for k in range(j, len(csv_data[i])):
                                         if csv_data[i][k].strip() == 'SELECTED,':
-                                            self.modified_data[REF_FIELD_NAMES[json_key]] = csv_data[0][k]
+                                            self.modified_data[REF_FIELD_NAMES[json_key]] = \
+                                                csv_data[0][k].replace("SELECTED", "").replace(",", "")
                                             break
 
         return
@@ -191,8 +190,7 @@ class Modifier:
         prev_hos_yes_confidence = 0
         prev_hos_no = 0
         prev_hos_no_confidence = 0
-        net_response = self.response[0]["Blocks"][1:]
-        for i, res in enumerate(net_response):
+        for i, res in enumerate(self.net_response):
             res_coordinate = res["Geometry"]["BoundingBox"]
             if res["BlockType"] == "WORD" and "[S]" in res["Text"]:
                 eth_s_coordinate = res_coordinate
@@ -200,28 +198,28 @@ class Modifier:
             if res["BlockType"] == "WORD" and "[B]" in res["Text"]:
                 eth_b_coordinate = res_coordinate
                 eth_b_confidence = res["Confidence"]
-                height_coordinate = net_response[i + 1]["Geometry"]["BoundingBox"]
+                height_coordinate = self.net_response[i + 1]["Geometry"]["BoundingBox"]
             if res["BlockType"] == "WORD" and "[T]" in res["Text"]:
                 eth_t_coordinate = res_coordinate
                 eth_t_confidence = res["Confidence"]
             if res["BlockType"] == "WORD" and "[M]" in res["Text"]:
                 eth_m_coordinate = res_coordinate
                 eth_m_confidence = res["Confidence"]
-            if res["BlockType"] == "WORD" and "Yes" in res["Text"] and "previously" in net_response[i - 1]["Text"]:
+            if res["BlockType"] == "WORD" and "Yes" in res["Text"] and "previously" in self.net_response[i - 1]["Text"]:
                 prev_diag_yes = res_coordinate
                 prev_diag_yes_confidence = res["Confidence"]
-            if res["BlockType"] == "WORD" and "No" in res["Text"] and "Approximate" in net_response[i + 1]["Text"]:
+            if res["BlockType"] == "WORD" and "No" in res["Text"] and "Approximate" in self.net_response[i + 1]["Text"]:
                 prev_diag_no = res_coordinate
                 prev_diag_no_confidence = res["Confidence"]
-            if res["BlockType"] == "WORD" and "Yes" in res["Text"] and "infection" in net_response[i - 1]["Text"]:
+            if res["BlockType"] == "WORD" and "Yes" in res["Text"] and "infection" in self.net_response[i - 1]["Text"]:
                 prev_hos_yes = res_coordinate
                 prev_hos_yes_confidence = res["Confidence"]
-            if res["BlockType"] == "WORD" and "No" in res["Text"] and "How" in net_response[i + 1]["Text"]:
+            if res["BlockType"] == "WORD" and "No" in res["Text"] and "How" in self.net_response[i + 1]["Text"]:
                 prev_hos_no = res_coordinate
                 prev_hos_no_confidence = res["Confidence"]
-
+        self.modified_data["ethnicity"] = ""
         if self.estimate_tick(origin_coord=eth_s_coordinate, next_coord=eth_t_coordinate):
-            self.modified_data["ethnicity"] = "[S]"
+            self.modified_data["ethnicity"] += "[S]"
             self.modified_data["ethnicity_confidence"] = eth_s_confidence
         if self.estimate_tick(origin_coord=eth_t_coordinate, next_coord=eth_m_coordinate):
             self.modified_data["ethnicity"] += "[T]"
@@ -255,46 +253,62 @@ class Modifier:
 
     def separate_two_values(self):
         pulse_rates_index = None
-        temp_index = None
+        init_temp_data = None
+        init_temp_data_confidence = 0
         for i, k_v_data in enumerate(self.key_value_data):
             if "Respiratory Rate" in k_v_data.key.text:
                 pulse_rates_index = i
-            if "Temp" in k_v_data.key.text:
-                temp_index = i
-            if pulse_rates_index is not None and temp_index is not None:
+            if pulse_rates_index is not None:
                 break
+        for i, res in enumerate(self.net_response):
+            if res["BlockType"] == "LINE" and "Temp" in res["Text"]:
+                if "or" in res["Text"]:
+                    init_temp_data = res["Text"].replace("Temp", "").replace(":", "")
+                    init_temp_data_confidence = res["Confidence"]
+                else:
+                    init_temp_data = self.net_response[i + 1]["Text"]
+                    init_temp_data_confidence = self.net_response[i + 1]["Confidence"]
+                break
+
         pulse_respiratory_rates = self.key_value_data[pulse_rates_index].value.text.replace("bpm", "")
         pulse_respiratory_rates_confidence = self.key_value_data[pulse_rates_index].value.confidence
-        pulse_rate, respiratory_rate = pulse_respiratory_rates.split(":")
-        self.modified_data["pulse_rate"] = pulse_rate
-        self.modified_data["pulse_rate_confidence"] = pulse_respiratory_rates_confidence
-        self.modified_data["respritory_rate"] = respiratory_rate
-        self.modified_data["respritory_rate_confidence"] = pulse_respiratory_rates_confidence
-        init_temp_data = self.key_value_data[temp_index].value.text
-        cel_temp, fa_temp = init_temp_data.split("or")
         try:
-            cel_temp = float(cel_temp.replace("0C", "").replace("-", "."))
-            self.modified_data["temperature"] = f"{cel_temp}C"
-            self.modified_data["temperature_confidence"] = self.key_value_data[temp_index].value.confidence
+            pulse_rate, respiratory_rate = pulse_respiratory_rates.split(":")
+            self.modified_data["pulse_rate"] = pulse_rate
+            self.modified_data["pulse_rate_confidence"] = pulse_respiratory_rates_confidence
+            self.modified_data["respritory_rate"] = respiratory_rate
+            self.modified_data["respritory_rate_confidence"] = pulse_respiratory_rates_confidence
         except Exception as e:
             print(e)
-        try:
-            fa_temp = float(fa_temp.replace("0F", "").replace("-", "."))
-            self.modified_data["temperature"] = f"{fa_temp}F"
-            self.modified_data["temperature_confidence"] = self.key_value_data[temp_index].value.confidence
-        except Exception as e:
-            print(e)
+            self.modified_data["pulse_rate"] = pulse_respiratory_rates
+            self.modified_data["pulse_rate_confidence"] = pulse_respiratory_rates_confidence
+            self.modified_data["respritory_rate"] = pulse_respiratory_rates
+            self.modified_data["respritory_rate_confidence"] = pulse_respiratory_rates_confidence
+        if init_temp_data is not None:
+            cel_temp, fa_temp = init_temp_data.split("or")
+            try:
+                cel_temp = float(cel_temp.replace("0C", "").replace("-", ".").replace("°C", ""))
+                self.modified_data["temperature"] = f"{cel_temp}°C"
+                self.modified_data["temperature_confidence"] = init_temp_data_confidence
+            except Exception as e:
+                print(e)
+            try:
+                fa_temp = float(fa_temp.replace("0F", "").replace("-", ".").replace("°F", ""))
+                self.modified_data["temperature"] = f"{fa_temp}°F"
+                self.modified_data["temperature_confidence"] = init_temp_data_confidence
+            except Exception as e:
+                print(e)
 
         return
 
     def run(self, response, key_value_data, table_data, frame_path):
-        self.response = response
+        self.net_response = response[0]["Blocks"][1:]
         self.key_value_data = key_value_data
         self.table_data = table_data
         self.frame = cv2.imread(frame_path)
         self.frame_height, self.frame_width = self.frame.shape[:2]
-        # self.separate_two_values()
-        # self.modify_table_data()
+        self.separate_two_values()
+        self.modify_table_data()
         self.process_image()
 
         return self.modified_data

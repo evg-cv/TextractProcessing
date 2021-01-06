@@ -83,4 +83,4 @@ def run(document_name):
 
 
 if __name__ == '__main__':
-    run(document_name="gs1494_GS1494.pdf")
+    run(document_name="gs1388_GS1388 (1).pdf")

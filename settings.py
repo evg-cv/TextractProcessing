@@ -3,7 +3,7 @@ DOWNLOAD_DIR = "/tmp"
 # change
 PREFIX = "test"
 JSON_PREFIX = "json"
-TICK_THRESH = 40
+TICK_THRESH = 30
 REF_FIELD_NAMES = {'fileName': 'filename', 'GRI ID:': 'sample_id', 'GRI ID:-Confidence': 'sample_id_confidence',
                    'Sample Collection Date:': 'sample_collected_date',
                    'Sample Collection Date:-Confidence': 'sample_collected_date_confidence',
