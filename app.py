@@ -5,12 +5,12 @@ import fitz
 # remove
 import configparser
 
-from Helper import DocProcessor, OutputGenerator
-from settings import BUCKET_NAME, JSON_PREFIX, DOWNLOAD_DIR, PREFIX
+from helper import DocProcessor, OutputGenerator
+from settings import BUCKET_NAME, JSON_PREFIX, DOWNLOAD_DIR, TEST_PREFIX, DOCUMENT_NAME, CONFIG_FILE_PATH
 
 # ------------------ remove
 params = configparser.ConfigParser()
-params.read("/media/main/Data/Task/TextractProcessing/config.cfg")
+params.read(CONFIG_FILE_PATH)
 # -----------------------------
 
 
@@ -32,7 +32,7 @@ def run(document_name):
     file_path = os.path.join(DOWNLOAD_DIR, document_name)
     frame_path = os.path.join(DOWNLOAD_DIR, document_name.replace('.pdf', '.png'))
     print(f"[INFO] {document_name} downloading...")
-    client.download_file(BUCKET_NAME, PREFIX + "/" + document_name, file_path)
+    client.download_file(BUCKET_NAME, TEST_PREFIX + "/" + document_name, file_path)
     doc = fitz.open(file_path)
     first_page = doc[0]
     image_matrix = fitz.Matrix(fitz.Identity)
@@ -46,7 +46,7 @@ def run(document_name):
         response = json.loads(file_content)
     else:
         # Get document textracted
-        dp = DocProcessor(PREFIX + "/" + document_name)
+        dp = DocProcessor(TEST_PREFIX + "/" + document_name)
         response = dp.run()
         # ---------- remove ----------
         json_file_path = "/media/main/Data/Task/TextractProcessing/test_json/" + document_json_name
@@ -59,28 +59,28 @@ def run(document_name):
             Body=(bytes(json.dumps(response, indent=4).encode('UTF-8')))
         )
 
-    print("Received Textract response...")
+    print("[INFO] Received Textract response...")
     # name, ext = FileHelper.get_file_name_and_extension(document_name)
     opg = OutputGenerator(response, document_name)
     opg.run(frame_path)
 
     copy_source = {
         'Bucket': BUCKET_NAME,
-        'Key': PREFIX + "/" + document_name
+        'Key': TEST_PREFIX + "/" + document_name
     }
-    copy_key = 'test_processed/{}'.format(document_name.split("/")[-1])
+    copy_key = f'test_processed/{document_name.split("/")[-1]}'
     s3.meta.client.copy(copy_source, BUCKET_NAME, copy_key)
 
     client.delete_object(
         Bucket=BUCKET_NAME,
-        Key=PREFIX + "/" + document_name,
+        Key=TEST_PREFIX + "/" + document_name,
     )
 
     return {
-        "body": json.dumps("{} Textracted Successfully.".format(document_name)),
+        "body": json.dumps(f"{document_name} Textracted Successfully."),
         "statusCode": 200
     }
 
 
 if __name__ == '__main__':
-    run(document_name="gs1388_GS1388 (1).pdf")
+    run(document_name=DOCUMENT_NAME)

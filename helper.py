@@ -2,25 +2,25 @@ import boto3
 import os
 import csv
 import time
-# remove
-import configparser
 
 from botocore.client import Config
 from trp import *
 from datetime import datetime
 from modifier import Modifier
-from settings import REF_FIELD_NAMES
+from settings import REF_FIELD_NAMES, LAMBDA, CONFIG_FILE_PATH, BUCKET_NAME, REGION, DOWNLOAD_DIR
 # ---------- remove ------------------
-params = configparser.ConfigParser()
-params.read("/media/main/Data/Task/TextractProcessing/config.cfg")
+if not LAMBDA:
+    import configparser
+    params = configparser.ConfigParser()
+    params.read(CONFIG_FILE_PATH)
 # ---------------------------
 
 
 class Input:
     def __init__(self):
-        self.bucketName = "medical-documents-storage"
+        self.bucketName = BUCKET_NAME
         self.fileName = ""
-        self.awsRegion = "us-west-1"
+        self.awsRegion = REGION
         self.detectText = True
         self.detectForms = True
         self.detectTables = True
@@ -37,9 +37,12 @@ class AwsHelper:
             )
         )
         # change
-        return boto3.client(name, region_name=aws_region, config=config,
-                            aws_access_key_id=params.get("DEFAULT", "access_key_id"),
-                            aws_secret_access_key=params.get("DEFAULT", "secret_access_key"))
+        if not LAMBDA:
+            return boto3.client(name, region_name=aws_region, config=config,
+                                aws_access_key_id=params.get("DEFAULT", "access_key_id"),
+                                aws_secret_access_key=params.get("DEFAULT", "secret_access_key"))
+        else:
+            return boto3.client(name, region_name=aws_region, config=config)
 
 
 class FileHelper:
@@ -87,15 +90,15 @@ class FileHelper:
         s3_client = AwsHelper().get_client('s3', inp.awsRegion)
         res = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
 
-        file_name = '{} {}.csv'.format(prefix, today)
-        tmp_file_name = '/tmp/{}'.format(file_name)
+        file_name = f'{prefix} {today}.csv'
+        tmp_file_name = os.path.join(DOWNLOAD_DIR, file_name)
 
         if 'Contents' in res:
             keys = res['Contents']
             for key in keys:
                 path_arr = key['Key'].split("/")
                 path_arr.reverse()
-                tmp_file_name = '/tmp/{}'.format(path_arr[0])
+                tmp_file_name = os.path.join(DOWNLOAD_DIR, path_arr[0])
                 with open(tmp_file_name, 'wb') as f:
                     s3_client.download_fileobj(bucket_name, key['Key'], f)
                     f.close()
@@ -124,9 +127,12 @@ class FileHelper:
             csv_file.close()
 
         # change
-        s3 = boto3.resource('s3', aws_access_key_id=params.get("DEFAULT", "access_key_id"),
-                            aws_secret_access_key=params.get("DEFAULT", "secret_access_key"))
-        s3.Object(bucket_name, "{}".format(file_name)).upload_file(tmp_file_name)
+        if not LAMBDA:
+            s3 = boto3.resource('s3', aws_access_key_id=params.get("DEFAULT", "access_key_id"),
+                                aws_secret_access_key=params.get("DEFAULT", "secret_access_key"))
+        else:
+            s3 = boto3.resource('s3')
+        s3.Object(bucket_name, f"{file_name}").upload_file(tmp_file_name)
 
 
 class PDFProcessor:
@@ -171,7 +177,7 @@ class PDFProcessor:
         else:
             response = client.get_document_analysis(JobId=job_id)
         status = response["JobStatus"]
-        print(status)
+        print(f"[INFO] {status}")
 
         while status == "IN_PROGRESS":
             time.sleep(5)
@@ -180,7 +186,7 @@ class PDFProcessor:
             else:
                 response = client.get_document_analysis(JobId=job_id)
             status = response["JobStatus"]
-            print(status)
+            print(f"[INFO] {status}")
 
         return status
 
@@ -196,11 +202,11 @@ class PDFProcessor:
         else:
             response = client.get_document_analysis(JobId=job_id)
         pages.append(response)
-        print("Result set page received: {}".format(len(pages)))
+        print(f"[INFO] Result set page received: {len(pages)}")
         next_token = None
         if 'NextToken' in response:
             next_token = response['NextToken']
-            # print("Next token: {}".format(nextToken))
+            # print(f"[INFO] Next token: {nextToken}")
 
         while next_token:
             time.sleep(5)
@@ -211,11 +217,11 @@ class PDFProcessor:
                 response = client.get_document_analysis(JobId=job_id, NextToken=next_token)
 
             pages.append(response)
-            print("Result set page received: {}".format(len(pages)))
+            print(f"[INFO] Result set page received: {len(pages)}")
             next_token = None
             if 'NextToken' in response:
                 next_token = response['NextToken']
-                # print("Next token: {}".format(nextToken))
+                # print(f"[INFO] Next token: {nextToken}")
 
             # if(len(pages) > 20):
             #    break
@@ -224,7 +230,7 @@ class PDFProcessor:
 
     def run(self):
         job_id = self._start_job()
-        print("Started Asyc Job with Id: {}".format(job_id))
+        print(f"[INFO] Started Asyc Job with Id: {job_id}")
         status = self._is_job_complete(job_id)
         if status == "SUCCEEDED":
             response_pages = self._get_job_results(job_id)
@@ -244,7 +250,7 @@ class DocProcessor:
         self.inputParameters = inp
 
     def run(self):
-        print("Starting Textract..")
+        print("[INFO] Starting Textract..")
 
         pdf_proc = PDFProcessor(self.inputParameters)
         self.output = pdf_proc.run()
@@ -269,7 +275,7 @@ class OutputGenerator:
         for field in page.form.fields:
             if field.key:
                 json_key = field.key.text
-                json_key1 = '{}-Confidence'.format(field.key.text)
+                json_key1 = f'{field.key.text}-Confidence'
             else:
                 json_key = ""
                 json_key1 = '-Confidence'
@@ -294,13 +300,13 @@ class OutputGenerator:
                     csv_row.append(cell.text.strip())
                 csv_data.append(csv_row)
 
-            print(csv_data)
+            # print(csv_data)
 
             if 'Criteria' in csv_data[0]:
                 for i in range(1, len(csv_data)):
                     for j in range(1, len(csv_data[i])):
-                        json_key = '{}-{}'.format(csv_data[i][0], csv_data[0][j])
-                        json_val = '{}'.format(csv_data[i][j])
+                        json_key = f'{csv_data[i][0]}-{csv_data[0][j]}'
+                        json_val = f'{csv_data[i][j]}'
                         if json_key in REF_FIELD_NAMES:
                             json_resp[REF_FIELD_NAMES[json_key]] = json_val
 
@@ -308,11 +314,11 @@ class OutputGenerator:
                 for i in range(1, len(csv_data)):
                     for j in range(0, len(csv_data[i])):
                         if csv_data[i][j] in REF_FIELD_NAMES:
-                            json_key = '{}'.format(csv_data[i][j])
+                            json_key = f'{csv_data[i][j]}'
                             json_val = ''
                             try:
                                 k = j + 1
-                                json_val = '{}'.format(csv_data[i][k])
+                                json_val = f'{csv_data[i][k]}'
                             except Exception as e:
                                 print(e)
                             json_resp[REF_FIELD_NAMES[json_key]] = json_val
@@ -331,8 +337,8 @@ class OutputGenerator:
         modified_data = self.modifier.run(response=self.response, frame_path=frame_path, table_data=page.tables,
                                           key_value_data=page.form.fields)
         json_resp['filename'] = self.document_name.split('/')[-1]
-        json_resp['final_path'] = 'https://test-textract-bucket1.s3.ap-south-1.amazonaws.com/processed/{}'.format(
-            self.document_name.split('/')[-1])
+        json_resp['final_path'] = f"https://test-textract-bucket1.s3.ap-south-1.amazonaws.com" \
+                                  f"/processed/{self.document_name.split('/')[-1]} "
         json_resp.update(modified_data)
         # print(jsonResp)
 
@@ -369,14 +375,14 @@ class OutputGenerator:
                 row_data.append("")
 
         FileHelper.write_csv_to_s3(header_row, row_data)
-        # FileHelper.writeCSV("{}-page-{}-tables.csv".format(self.fileName, p), fieldNames, [rowData])
-        # FileHelper.writeCSVRaw("{}-page-{}-tables.csv".format(self.fileName, p), csvData)
+        # FileHelper.writeCSV(f"{self.fileName}-page-{p}-tables.csv", fieldNames, [rowData])
+        # FileHelper.writeCSVRaw(f"{self.fileName}-page-{p}-tables.csv", csvData)
 
     def run(self, frame_path):
         if not self.document.pages:
             return
 
-        print("Total Pages in Document: {}".format(len(self.document.pages)))
+        print(f"[INFO] Total Pages in Document: {len(self.document.pages)}")
 
         p = 1
         for page in self.document.pages:
@@ -386,6 +392,6 @@ class OutputGenerator:
 
 if __name__ == '__main__':
     import json
-    with open("/media/main/Data/Task/TextractProcessing/test_json/gs1494_GS1494.json", "r") as fi:
+    with open("", "r") as fi:
         json_res = json.load(fi)
-    OutputGenerator(response=json_res, document_name="").run(frame_path="/tmp/gs1494_GS1494.png")
+    OutputGenerator(response=json_res, document_name="").run(frame_path="")

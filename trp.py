@@ -6,7 +6,7 @@ class BoundingBox:
         self._top = top
 
     def __str__(self):
-        return "width: {}, height: {}, left: {}, top: {}".format(self._width, self._height, self._left, self._top)
+        return f"width: {self._width}, height: {self._height}, left: {self._left}, top: {self._top}"
 
     @property
     def width(self):
@@ -31,7 +31,7 @@ class Polygon:
         self._y = y
 
     def __str__(self):
-        return "x: {}, y: {}".format(self._x, self._y)
+        return f"x: {self._x}, y: {self._y}"
 
     @property
     def x(self):
@@ -55,7 +55,7 @@ class Geometry:
         self._polygon = pgs
 
     def __str__(self):
-        s = "BoundingBox: {}\n".format(str(self._boundingBox))
+        s = f"BoundingBox: {str(self._boundingBox)}\n"
         return s
 
     @property
@@ -126,7 +126,7 @@ class Line:
         s = s + self._text + "\n"
         s = s + "Words\n----------\n"
         for word in self._words:
-            s = s + "[{}]".format(str(word))
+            s = s + f"[{str(word)}]"
         return s
 
     @property
@@ -305,7 +305,7 @@ class Field:
             k = str(self._key)
         if self._value:
             v = str(self._value)
-        s = s + "Key: {}\nValue: {}".format(k, v)
+        s = s + f"Key: {k}\nValue: {v}"
         return s
 
     @property
@@ -429,7 +429,7 @@ class Row:
     def __str__(self):
         s = ""
         for cell in self._cells:
-            s = s + "[{}]".format(str(cell))
+            s = s + f"[{str(cell)}]"
         return s
 
     @property
@@ -531,7 +531,8 @@ class Page:
                         self._form.add_field(f)
                         self._content.append(f)
                     else:
-                        print("WARNING: Detected K/V where key does not have content. Excluding key from output.")
+                        print("[INFO] WARNING: Detected K/V where key does not have content. "
+                              "Excluding key from output.")
                         print(f)
                         print(item)
 

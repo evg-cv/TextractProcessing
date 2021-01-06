@@ -1,9 +1,10 @@
 BUCKET_NAME = 'medical-documents-storage'
+DOCUMENT_PREFIX = "documents"
+REGION = "us-west-1"
 DOWNLOAD_DIR = "/tmp"
-# change
-PREFIX = "test"
 JSON_PREFIX = "json"
 TICK_THRESH = 30
+LAMBDA = False
 REF_FIELD_NAMES = {'fileName': 'filename', 'GRI ID:': 'sample_id', 'GRI ID:-Confidence': 'sample_id_confidence',
                    'Sample Collection Date:': 'sample_collected_date',
                    'Sample Collection Date:-Confidence': 'sample_collected_date_confidence',
@@ -81,3 +82,6 @@ REF_FIELD_NAMES = {'fileName': 'filename', 'GRI ID:': 'sample_id', 'GRI ID:-Conf
                    'Presumptive Diagnosis': 'presumptive_diagnosis',
                    'Presumptive Diagnosis-Confidence': 'presumptive_diagnosis_confidence',
                    'Other comments': 'other_comments'}
+DOCUMENT_NAME = ""
+TEST_PREFIX = "test"
+CONFIG_FILE_PATH = ""

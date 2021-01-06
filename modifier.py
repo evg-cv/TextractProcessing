@@ -1,13 +1,15 @@
+import os
 import cv2
 import boto3
-import configparser
 
 from trp import Document
-from settings import REF_FIELD_NAMES, TICK_THRESH
+from settings import REF_FIELD_NAMES, TICK_THRESH, LAMBDA, CONFIG_FILE_PATH, REGION, DOWNLOAD_DIR
 
 # ---------- remove --------
-params = configparser.ConfigParser()
-params.read("/media/main/Data/Task/TextractProcessing/config.cfg")
+if not LAMBDA:
+    import configparser
+    params = configparser.ConfigParser()
+    params.read(CONFIG_FILE_PATH)
 # ---------------
 
 
@@ -20,9 +22,12 @@ class Modifier:
         self.frame_width = None
         self.frame_height = None
         self.modified_data = {}
-        self.textract = boto3.client('textract', region_name=params.get("DEFAULT", "region_name"),
-                                     aws_access_key_id=params.get("DEFAULT", "access_key_id"),
-                                     aws_secret_access_key=params.get("DEFAULT", "secret_access_key"))
+        if not LAMBDA:
+            self.textract = boto3.client('textract', region_name=params.get("DEFAULT", "region_name"),
+                                         aws_access_key_id=params.get("DEFAULT", "access_key_id"),
+                                         aws_secret_access_key=params.get("DEFAULT", "secret_access_key"))
+        else:
+            self.textract = boto3.client('textract', region_name=REGION)
 
     def extract_ocr_local(self, frame_path):
 
@@ -56,7 +61,7 @@ class Modifier:
         # cv2.imshow("thresh frame", thresh_frame)
         # cv2.waitKey()
         black_pixel_nums = len(thresh_frame[thresh_frame == 0])
-        print(black_pixel_nums)
+        # print(black_pixel_nums)
         if yes_no_ret:
             return black_pixel_nums
         else:
@@ -120,12 +125,13 @@ class Modifier:
                         modify_table_coordinates.append([i_t_coordinate[0] - 0.01, i_t_coordinate[1] - 0.01, 1, 1])
 
         for idx, m_tbl_coordinate in enumerate(modify_table_coordinates):
-            cv2.imwrite(f"/tmp/{idx}.jpg",
+            sub_frame_path = os.path.join(DOWNLOAD_DIR, f"{idx}.jpg")
+            cv2.imwrite(sub_frame_path,
                         self.frame[int(m_tbl_coordinate[1] * self.frame_height):
                                    int(m_tbl_coordinate[3] * self.frame_height),
                                    int(m_tbl_coordinate[0] * self.frame_width):
                                    int(m_tbl_coordinate[2] * self.frame_width)])
-            m_tbl_response = self.extract_ocr_local(frame_path=f"/tmp/{idx}.jpg")
+            m_tbl_response = self.extract_ocr_local(frame_path=sub_frame_path)
             document_data = Document(response_pages=m_tbl_response)
             for table in document_data.pages[0].tables:
                 csv_data = []
@@ -135,13 +141,13 @@ class Modifier:
                         csv_row.append(cell.text.strip())
                     csv_data.append(csv_row)
 
-                print(csv_data)
+                # print(csv_data)
 
                 if 'Criteria' in csv_data[0]:
                     for i in range(1, len(csv_data)):
                         for j in range(1, len(csv_data[i])):
-                            json_key = '{}-{}'.format(csv_data[i][0], csv_data[0][j])
-                            json_val = '{}'.format(csv_data[i][j])
+                            json_key = f'{csv_data[i][0]}-{csv_data[0][j]}'
+                            json_val = f'{csv_data[i][j]}'
                             if json_key in REF_FIELD_NAMES:
                                 self.modified_data[REF_FIELD_NAMES[json_key]] = json_val
 
@@ -149,11 +155,11 @@ class Modifier:
                     for i in range(1, len(csv_data)):
                         for j in range(0, len(csv_data[i])):
                             if csv_data[i][j] in REF_FIELD_NAMES:
-                                json_key = '{}'.format(csv_data[i][j])
+                                json_key = f'{csv_data[i][j]}'
                                 json_val = ''
                                 try:
                                     k = j + 1
-                                    json_val = '{}'.format(csv_data[i][k])
+                                    json_val = f'{csv_data[i][k]}'
                                 except Exception as e:
                                     print(e)
                                 self.modified_data[REF_FIELD_NAMES[json_key]] = json_val
