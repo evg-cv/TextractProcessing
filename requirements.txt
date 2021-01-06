@@ -1,2 +1,4 @@
 boto3~=1.16.48
 botocore~=1.19.48
+opencv-python~=4.2.0.34
+pymupdf==1.18.5

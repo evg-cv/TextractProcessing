@@ -15,7 +15,7 @@ def lambda_handler(event, context):
                 # Get document textracted
                 dp = DocProcessor(document_name)
                 response = dp.run()
-                print("Recieved Textract response...")
+                print("Received Textract response...")
 
                 opg = OutputGenerator(response, document_name)
                 opg.run()

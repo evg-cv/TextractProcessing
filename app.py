@@ -1,32 +1,79 @@
+import os
 import boto3
-from Helper import DocProcessor, OutputGenerator
 import json
+import fitz
+# remove
+import configparser
+
+from Helper import DocProcessor, OutputGenerator
+from settings import BUCKET_NAME, JSON_PREFIX, DOWNLOAD_DIR, PREFIX
+
+# ------------------ remove
+params = configparser.ConfigParser()
+params.read("/media/main/Data/Task/TextractProcessing/config.cfg")
+# -----------------------------
 
 
 def run(document_name):
-    bucket_name = 'medical-documents-storage'
+    # ---------- remove ---------------
+    client = boto3.client('s3', aws_access_key_id=params.get("DEFAULT", "access_key_id"),
+                          aws_secret_access_key=params.get("DEFAULT", "secret_access_key"))
+    s3 = boto3.resource('s3', aws_access_key_id=params.get("DEFAULT", "access_key_id"),
+                        aws_secret_access_key=params.get("DEFAULT", "secret_access_key"))
+    # -----------------
 
-    # Get document textracted
-    dp = DocProcessor(document_name)
-    response = dp.run()
-    print("Recieved Textract response...")
+    document_json_name = document_name.replace("pdf", "json")
+    processed_files = []
+    response = client.list_objects(Bucket=BUCKET_NAME, Prefix=JSON_PREFIX)
+    for content in response.get('Contents', []):
+        obj = content.get('Key')
+        if ".json" in obj:
+            processed_files.append(obj.split("/")[1])
+    file_path = os.path.join(DOWNLOAD_DIR, document_name)
+    frame_path = os.path.join(DOWNLOAD_DIR, document_name.replace('.pdf', '.png'))
+    print(f"[INFO] {document_name} downloading...")
+    client.download_file(BUCKET_NAME, PREFIX + "/" + document_name, file_path)
+    doc = fitz.open(file_path)
+    first_page = doc[0]
+    image_matrix = fitz.Matrix(fitz.Identity)
+    image_matrix.preScale(2, 2)
+    pix = first_page.getPixmap(alpha=False, matrix=image_matrix)
+    pix.writePNG(frame_path)
 
+    if document_json_name in processed_files:
+        content_object = s3.Object(BUCKET_NAME, JSON_PREFIX + "/" + document_json_name)
+        file_content = content_object.get()['Body'].read().decode('utf-8')
+        response = json.loads(file_content)
+    else:
+        # Get document textracted
+        dp = DocProcessor(PREFIX + "/" + document_name)
+        response = dp.run()
+        # ---------- remove ----------
+        json_file_path = "/media/main/Data/Task/TextractProcessing/test_json/" + document_json_name
+        file = open(json_file_path, "w")
+        file.write(json.dumps(response, indent=4))
+        file.close()
+        # ---------------------------------------
+        s3object = s3.Object(BUCKET_NAME, JSON_PREFIX + "/" + document_json_name)
+        s3object.put(
+            Body=(bytes(json.dumps(response, indent=4).encode('UTF-8')))
+        )
+
+    print("Received Textract response...")
     # name, ext = FileHelper.get_file_name_and_extension(document_name)
     opg = OutputGenerator(response, document_name)
-    opg.run()
+    opg.run(frame_path)
 
-    s3 = boto3.resource('s3')
     copy_source = {
-        'Bucket': bucket_name,
-        'Key': document_name
+        'Bucket': BUCKET_NAME,
+        'Key': PREFIX + "/" + document_name
     }
-    copy_key = 'processed/{}'.format(document_name.split("/")[-1])
-    s3.meta.client.copy(copy_source, bucket_name, copy_key)
+    copy_key = 'test_processed/{}'.format(document_name.split("/")[-1])
+    s3.meta.client.copy(copy_source, BUCKET_NAME, copy_key)
 
-    client = boto3.client('s3')
     client.delete_object(
-        Bucket=bucket_name,
-        Key=document_name,
+        Bucket=BUCKET_NAME,
+        Key=PREFIX + "/" + document_name,
     )
 
     return {
@@ -36,4 +83,4 @@ def run(document_name):
 
 
 if __name__ == '__main__':
-    run(document_name="")
+    run(document_name="gs1494_GS1494.pdf")
