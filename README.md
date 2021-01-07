@@ -2,8 +2,8 @@
 
 ## Overview
 
-This project is to extract the necessary information from the scanned information using AWS Textract and image processing
-with OpenCV & PyMyPDf library. 
+This project is to extract the necessary information from the scanned information on AWS s3 bucket using AWS Textract 
+and image processing with OpenCV & PyMyPDf library. 
 This is deployed on AWS Lambda.
 
 ## Structure
