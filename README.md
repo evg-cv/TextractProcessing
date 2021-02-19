@@ -2,32 +2,15 @@
 
 ## Overview
 
-This project is to extract the necessary information from the scanned information on AWS s3 bucket using AWS Textract 
+This project is to extract the necessary information from the scanned pdf using AWS Textract 
 and image processing with OpenCV & PyMyPDf library. 
-This is deployed on AWS Lambda.
 
 ## Structure
 
 - app
 
     The main execution file on local environment
-
-- config
-
-    The configuration file for AWS Access Key
     
-- helper
-
-    The source code for extraction of the necessary information
-    
-- lambda_function
-
-    The main execution file on AWS Lambda
-    
-- modifier
-
-    The source code to supplement the result
-
 - requirements
 
     All the dependencies for this project
@@ -36,9 +19,6 @@ This is deployed on AWS Lambda.
 
     Several settings for some constants
 
-- trp
-
-    The source code for tool
     
 ## Installation
 
